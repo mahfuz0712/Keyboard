@@ -1,7 +1,7 @@
 {
   "name": "Keyboard",
   "description": "Sci-fi HUD keyboard for Android with English, Bangla and symbols. No tracking, no network access from the keyboard.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "ageRating": "3+",
   "type": "app",
   "containsAds": false,
