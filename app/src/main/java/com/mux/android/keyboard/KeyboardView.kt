@@ -20,7 +20,8 @@ import kotlin.math.min
 class KeyboardView(ctx: Context) : View(ctx) {
 
     interface Listener {
-        fun onChar(text: String)
+        fun onChar(text: String, alt: Boolean)
+        fun onSuggestion(index: Int)
         fun onDelete()
         fun onShift(longPress: Boolean)
         fun onEnter()
@@ -56,7 +57,7 @@ class KeyboardView(ctx: Context) : View(ctx) {
 
     private val gap = 4f * d
     private val side = 3f * d
-    private val stripH = 34f * d
+    private val stripH = 40f * d
 
     private var rows: List<List<Key>> = emptyList()
     private val rects = ArrayList<KeyRect>()
@@ -66,12 +67,15 @@ class KeyboardView(ctx: Context) : View(ctx) {
     private var shift = 0
     private var enterLabel = ""
     private var langLabel = "EN"
-    private var letterPage = Page.EN
+    private var bangla = false
     private var numberRow = true
     private var title = "EN"
 
     private val pasteRect = RectF()
     private val hideRect = RectF()
+
+    private var sug: List<String> = emptyList()
+    private val sugRects = ArrayList<RectF>()
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f * d }
@@ -122,20 +126,41 @@ class KeyboardView(ctx: Context) : View(ctx) {
     }
 
     /** Called by the service whenever the page / shift / editor changes. */
-    fun setState(page: Page, shift: Int, enterLabel: String, langLabel: String, letterPage: Page) {
+    fun setState(page: Page, shift: Int, enterLabel: String, langLabel: String, bangla: Boolean) {
         this.page = page
         this.shift = shift
         this.enterLabel = enterLabel
         this.langLabel = langLabel
-        this.letterPage = letterPage
+        this.bangla = bangla
         this.title = langLabel
         applyTheme()
         numberRow = KeyPrefs.numberRow
-        rows = Layouts.rows(Layouts.Ctx(page, shift, numberRow, enterLabel, langLabel, letterPage))
+        rows = Layouts.rows(Layouts.Ctx(page, shift, numberRow, enterLabel, langLabel, bangla))
         cancelAll()
         requestLayout()
         layoutKeys()
         invalidate()
+    }
+
+    /** Words shown in the strip while a phonetic word is being typed. Empty = normal strip. */
+    fun setSuggestions(list: List<String>) {
+        sug = list
+        layoutSuggestions()
+        invalidate()
+    }
+
+    private fun layoutSuggestions() {
+        sugRects.clear()
+        val w = width.toFloat()
+        if (w <= 0f || sug.isEmpty()) return
+        val n = sug.size
+        val bh = stripH - 8f * d
+        val cw = (w - 2 * side - gap * (n - 1)) / n
+        var x = side
+        for (i in 0 until n) {
+            sugRects.add(RectF(x, 4f * d, x + cw, 4f * d + bh))
+            x += cw + gap
+        }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -180,6 +205,7 @@ class KeyboardView(ctx: Context) : View(ctx) {
         val bw = 62f * d
         hideRect.set(w - side - bw, 4f * d, w - side, 4f * d + bh)
         pasteRect.set(hideRect.left - gap - bw, 4f * d, hideRect.left - gap, 4f * d + bh)
+        layoutSuggestions()
     }
 
     private fun cutPath(p: Path, r: RectF, c: Float) {
@@ -220,23 +246,50 @@ class KeyboardView(ctx: Context) : View(ctx) {
     }
 
     private fun drawStrip(canvas: Canvas) {
+        if (sug.isNotEmpty()) {
+            for (i in sug.indices) {
+                if (i < sugRects.size) drawSuggestion(canvas, sugRects[i], sug[i], i == 0)
+            }
+            return
+        }
         monoPaint.textSize = 13f * d
         monoPaint.textAlign = Paint.Align.LEFT
         monoPaint.color = cPrimary
-        canvas.drawText("◈ " + title, side + 4f * d, stripH / 2f + 5f * d, monoPaint)
+        canvas.drawText("\u25C8 " + title, side + 4f * d, stripH / 2f + 5f * d, monoPaint)
         monoPaint.textSize = 9f * d
         monoPaint.color = cDim
         val pageName = when (page) {
-            Page.EN -> "LETTERS"
+            Page.EN -> if (bangla) "PHONETIC" else "LETTERS"
             Page.SYM1 -> "SYMBOLS 1/2"
             Page.SYM2 -> "SYMBOLS 2/2"
-            Page.BN1 -> "BANGLA 1/3"
-            Page.BN2 -> "BANGLA 2/3"
-            Page.BN3 -> "BANGLA 3/3"
         }
         canvas.drawText(pageName, side + 52f * d, stripH / 2f + 4f * d, monoPaint)
         drawSmallButton(canvas, pasteRect, "PASTE", cPrimary)
         drawSmallButton(canvas, hideRect, "HIDE", cAccent)
+    }
+
+    private fun drawSuggestion(canvas: Canvas, r: RectF, word: String, first: Boolean) {
+        val color = if (first) cAccent else cPrimary
+        cutPath(tmpPath, r, 5f * d)
+        fill.color = (color and 0x00FFFFFF) or (if (first) 0x30000000 else 0x12000000)
+        canvas.drawPath(tmpPath, fill)
+        stroke.color = (color and 0x00FFFFFF) or 0xAA000000.toInt()
+        canvas.drawPath(tmpPath, stroke)
+        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.isFakeBoldText = false
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = if (first) cAccent else cText
+        var size = 17f * d
+        textPaint.textSize = size
+        val maxW = r.width() * 0.9f
+        val tw = textPaint.measureText(word)
+        if (tw > maxW) {
+            size = size * maxW / tw
+            textPaint.textSize = size
+        }
+        val fm = textPaint.fontMetrics
+        canvas.drawText(word, r.centerX(), r.centerY() - (fm.ascent + fm.descent) / 2f, textPaint)
+        textPaint.isFakeBoldText = true
     }
 
     private fun drawSmallButton(canvas: Canvas, r: RectF, label: String, color: Int) {
@@ -279,6 +332,15 @@ class KeyboardView(ctx: Context) : View(ctx) {
             KT.PAGE -> drawLabel(canvas, kr, k.label, cPrimary, 0.30f, true)
             KT.CHAR -> {
                 drawLabel(canvas, kr, k.label, cText, 0.40f, false)
+                if (k.sub.isNotEmpty()) {
+                    textPaint.typeface = Typeface.DEFAULT
+                    textPaint.textSize = r.height() * 0.22f
+                    textPaint.color = cDim
+                    textPaint.textAlign = Paint.Align.RIGHT
+                    canvas.drawText(k.sub, r.right - 5f * d, r.bottom - 5f * d, textPaint)
+                    textPaint.textAlign = Paint.Align.CENTER
+                    textPaint.typeface = Typeface.DEFAULT_BOLD
+                }
                 if (k.hint.isNotEmpty()) {
                     textPaint.typeface = Typeface.MONOSPACE
                     textPaint.textSize = r.height() * 0.22f
@@ -493,6 +555,17 @@ class KeyboardView(ctx: Context) : View(ctx) {
 
     private fun down(id: Int, x: Float, y: Float) {
         if (y < stripH) {
+            if (sug.isNotEmpty()) {
+                for (i in sugRects.indices) {
+                    val r = sugRects[i]
+                    if (x >= r.left - gap / 2 && x <= r.right + gap / 2) {
+                        feedback(KT.CHAR)
+                        listener?.onSuggestion(i)
+                        return
+                    }
+                }
+                return
+            }
             if (pasteRect.contains(x, y)) { feedback(KT.CHAR); listener?.onPaste() }
             else if (hideRect.contains(x, y)) { feedback(KT.CHAR); listener?.onHide() }
             return
@@ -588,10 +661,10 @@ class KeyboardView(ctx: Context) : View(ctx) {
             val k = kr.key
             if (p.popup.isNotEmpty()) {
                 val items = popupItems(p.popup)
-                if (p.popupIdx in items.indices) listener?.onChar(items[p.popupIdx])
+                if (p.popupIdx in items.indices) listener?.onChar(items[p.popupIdx], true)
             } else if (!p.longFired) {
                 when (k.type) {
-                    KT.CHAR -> listener?.onChar(k.text)
+                    KT.CHAR -> listener?.onChar(k.text, false)
                     KT.SHIFT -> listener?.onShift(false)
                     KT.ENTER -> listener?.onEnter()
                     KT.SPACE -> if (!p.dragged) listener?.onSpace()
