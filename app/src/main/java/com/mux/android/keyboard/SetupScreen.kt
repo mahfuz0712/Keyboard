@@ -104,12 +104,24 @@ fun SetupScreen(tablet: Boolean, onTest: () -> Unit) {
                 HudText("Only this settings app can go online, and only to look for a new version.", color = c.dim, size = 11.sp)
             }
             Spacer(Modifier.height(8.dp))
+            HudPanel(Modifier.fillMaxWidth(), "BANGLA PHONETIC") {
+                HudText("Press the EN key to switch to বাং, then type with English letters:", color = c.text, size = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                HudText("ami banglay gan gai.", color = c.dim, size = 12.sp)
+                HudText("আমি বাংলায় গান গাই।", color = c.accent, size = 15.sp, bold = true)
+                Spacer(Modifier.height(6.dp))
+                HudText("• Strip on top shows other spellings. Tap one to use it.", color = c.text, size = 12.sp)
+                HudText("• SPACE keeps the first (highlighted) word.", color = c.text, size = 12.sp)
+                HudText("• Capital letters = hard sounds: T D N R S, O I U (use SHIFT).", color = c.text, size = 12.sp)
+                HudText("• Hold n for ং ঁ ঃ, hold t for ৎ.", color = c.text, size = 12.sp)
+                HudText("• Dot key gives ।", color = c.text, size = 12.sp)
+            }
+            Spacer(Modifier.height(8.dp))
             HudPanel(Modifier.fillMaxWidth(), "HOW TO TYPE") {
                 HudText("• HOLD A KEY: accents, symbols, digits", color = c.text, size = 12.sp)
                 HudText("• DRAG ON SPACE: move the cursor", color = c.text, size = 12.sp)
                 HudText("• DOUBLE-TAP SHIFT: caps lock", color = c.text, size = 12.sp)
                 HudText("• HOLD LANGUAGE KEY: switch keyboard", color = c.text, size = 12.sp)
-                HudText("• BANGLA: ১/৩ key flips between 3 pages", color = c.text, size = 12.sp)
             }
         }
     }
